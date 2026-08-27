@@ -131,6 +131,18 @@ def display_chart_tab(df: pd.DataFrame, key_prefix: str = ""):
         st.scatter_chart(chart_df, x=x_col, y=y_col)
 
 # YAML Verified Query Matcher & Rule-Based SQL Engine
+# def generate_sql_from_prompt(prompt: str):
+#     p = prompt.lower().strip()
+    
+#     # 0. Greetings & Status Questions
+#     if any(greet in p for greet in ["how are you", "how's it going", "what's up", "whats up"]):
+#         explanation = "I'm doing well, thank you! I am ready to help you analyze inventory levels, stockouts, warehouses, and product categories. What metric would you like to explore?"
+#         return explanation, None
+
+#     elif p in ["hi", "hello", "hey", "help", "good morning", "good evening"]:
+#         explanation = "Hello! I am your Inventory Intelligence Assistant powered by your semantic data model. Ask any question about stock, warehouses, products, or supply!"
+#         return explanation, None
+# YAML Verified Query Matcher & Rule-Based SQL Engine
 def generate_sql_from_prompt(prompt: str):
     p = prompt.lower().strip()
     
@@ -139,11 +151,26 @@ def generate_sql_from_prompt(prompt: str):
         explanation = "I'm doing well, thank you! I am ready to help you analyze inventory levels, stockouts, warehouses, and product categories. What metric would you like to explore?"
         return explanation, None
 
-    elif p in ["hi", "hello", "hey", "help", "good morning", "good evening"]:
-        explanation = "Hello! I am your Inventory Intelligence Assistant powered by your semantic data model. Ask any question about stock, warehouses, products, or supply!"
+    # 1. Help & Examples (Catches "what questions can I ask")
+    elif any(help_word in p for help_word in ["what can i ask", "what questions", "what can you do", "examples", "help"]):
+        explanation = (
+            "You can ask me questions about your inventory data! Here are some exact questions you can try:\n\n"
+            "**Inventory Value:**\n"
+            "- What is the total available inventory value?\n"
+            "- What is the inventory value by warehouse?\n"
+            "- What is the inventory value by product category?\n\n"
+            "**Stock & Reordering:**\n"
+            "- How many products are out of stock?\n"
+            "- What is the total excess inventory value by warehouse?\n"
+            "- How many products need to be reordered?\n\n"
+            "*(You can also open the Lightbulb drop-down menu above for the full list!)*"
+        )
         return explanation, None
 
-    # 1. Total available inventory value
+    elif p in ["hi", "hello", "hey", "good morning", "good evening"]:
+        explanation = "Hello! I am your Inventory Intelligence Assistant powered by your semantic data model. Ask any question about stock, warehouses, products, or supply!"
+        return explanation, None
+    # 2. Total available inventory value
     if "total available inventory" in p or ("inventory value" in p and "warehouse" not in p and "category" not in p and "brand" not in p):
         explanation = "Calculating total inventory value across all warehouses as of the latest snapshot."
         sql = """
@@ -153,7 +180,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 2. Total quantity on hand
+    # 3. Total quantity on hand
     elif "quantity" in p and "on hand" in p and "product" not in p:
         explanation = "Calculating the total physical quantity of inventory currently on hand."
         sql = """
@@ -163,7 +190,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 3. Inventory value by warehouse
+    # 4. Inventory value by warehouse
     elif "inventory value by warehouse" in p:
         explanation = "Aggregating total inventory value grouped by warehouse location."
         sql = """
@@ -175,7 +202,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 4. Total inventory value by product category
+    # 5. Total inventory value by product category
     elif "inventory value by product category" in p or "by category" in p:
         explanation = "Aggregating inventory value by product category."
         sql = """
@@ -187,7 +214,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 5. Inventory value by subcategory
+    # 6. Inventory value by subcategory
     elif "subcategory" in p:
         explanation = "Aggregating inventory value by product subcategory."
         sql = """
@@ -199,7 +226,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 6. Inventory value by brand
+    # 7. Inventory value by brand
     elif "brand" in p:
         explanation = "Aggregating inventory value by product brand."
         sql = """
@@ -211,7 +238,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 7. Products out of stock / Stockout count
+    # 8. Products out of stock / Stockout count
     elif "stockout" in p or "out of stock" in p:
         if "warehouse" in p:
             explanation = "Calculating the number of stockouts organized by warehouse."
@@ -232,7 +259,7 @@ def generate_sql_from_prompt(prompt: str):
             """
         return explanation, sql.strip()
 
-    # 8. Excess inventory value by warehouse
+    # 9. Excess inventory value by warehouse
     elif "excess" in p and "warehouse" in p:
         explanation = "Aggregating the financial value of excess stock held above safety buffers by warehouse."
         sql = """
@@ -244,7 +271,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 9. Top 10 products by inventory value
+    # 10. Top 10 products by inventory value
     elif "top 10" in p and "inventory value" in p:
         explanation = "Ranking the top 10 products carrying the highest inventory value."
         sql = """
@@ -256,7 +283,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 10. Reorder needed
+    # 11. Reorder needed
     elif "reorder" in p:
         explanation = "Counting products that have fallen below their reorder threshold."
         sql = """
@@ -267,7 +294,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 11. ABC Classification
+    # 12. ABC Classification
     elif "abc" in p:
         explanation = "Evaluating inventory value across ABC classification tiers."
         sql = """
@@ -279,7 +306,7 @@ def generate_sql_from_prompt(prompt: str):
         """
         return explanation, sql.strip()
 
-    # 12. Out-of-Domain Guardrail Check
+    # 13. Out-of-Domain Guardrail Check
     domain_keywords = [
         "inventory", "warehouse", "product", "stock", "stockout", "excess", "quarantine", "reorder", 
         "category", "subcategory", "brand", "abc", "hazardous", "perishable", "cold-chain", "sku", "supply", "quantity"
@@ -292,7 +319,7 @@ def generate_sql_from_prompt(prompt: str):
         )
         return explanation, None
 
-    # 13. Fallback Overview
+    # 14. Fallback Overview
     else:
         explanation = "Displaying a recent snapshot overview of inventory by product and warehouse:"
         sql = """
