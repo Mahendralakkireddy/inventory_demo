@@ -10,7 +10,7 @@ import plotly.express as px
 import time
 
 # Snowflake/Cortex Configuration
-HOST = "jjb56734.snowflakecomputing.com"
+HOST = "xyuhkav-xrb12650.snowflakecomputing.com"
 DATABASE = "INVENTORY_DW"
 SCHEMA = "GOLD"
 API_ENDPOINT = "/api/v2/cortex/agent:run"
