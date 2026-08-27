@@ -5,19 +5,20 @@ import requests
 import snowflake.connector
 import pandas as pd
 from snowflake.snowpark import Session
-from snowflake.core import Root
+#from snowflake.core import Root
 from typing import Any, Dict, List, Optional, Tuple
 import plotly.express as px
 import time
 
 # Snowflake/Cortex Configuration
-HOST = "DWFIOCJ-BFB11160.snowflakecomputing.com"
-DATABASE = "AI"
-SCHEMA = "DWH_MART"
+HOST = "XYUHKAV-XRB12650.snowflakecomputing.com"
+DATABASE = "INVENTORY_DW"
+SCHEMA = "GOLD"
 API_ENDPOINT = "/api/v2/cortex/agent:run"
 API_TIMEOUT = 50000  # in milliseconds
-CORTEX_SEARCH_SERVICES = "AI.DWH_MART.PBCS_SEARCH_SERVICE"
-SEMANTIC_MODEL = '@"AI"."DWH_MART"."PBCS"/pbcs.yaml'
+
+# Updated to use your Inventory Semantic Model path
+SEMANTIC_MODEL = '@"INVENTORY_DW"."SEMANTIC"."SEMANTIC_MODELS"/inv_analytics.yaml'
 
 # Model options
 MODELS = [
@@ -64,8 +65,6 @@ if "current_summary" not in st.session_state:
     st.session_state.current_summary = None
 if "service_metadata" not in st.session_state:
     st.session_state.service_metadata = []
-if "selected_cortex_search_service" not in st.session_state:
-    st.session_state.selected_cortex_search_service = CORTEX_SEARCH_SERVICES
 if "model_name" not in st.session_state:
     st.session_state.model_name = "mistral-large"
 if "num_retrieved_chunks" not in st.session_state:
@@ -109,7 +108,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Add DiLytics logo at the top right
-logo_url = "https://dilytics.com/wp-content/uploads/2022/11/logo.png"  # Replace with actual DiLytics logo URL
+logo_url = "https://dilytics.com/wp-content/uploads/2022/11/logo.png" 
 st.markdown(f'<div class="logo-container"><img src="{logo_url}" width="150"></div>', unsafe_allow_html=True)
 
 # Function to start a new conversation
@@ -127,16 +126,6 @@ def start_new_conversation():
     st.session_state.clear_conversation = False
     st.session_state.welcome_displayed = False
     st.session_state.rerun_trigger = True
-
-# Initialize service metadata
-def init_service_metadata():
-    st.session_state.service_metadata = [{"name": "PBCS_SEARCH_SERVICE", "search_column": ""}]
-    st.session_state.selected_cortex_search_service = "PBCS_SEARCH_SERVICE"
-    try:
-        svc_search_col = session.sql("DESC CORTEX SEARCH SERVICE PBCS_SEARCH_SERVICE;").collect()[0]["search_column"]
-        st.session_state.service_metadata = [{"name": "PBCS_SEARCH_SERVICE", "search_column": svc_search_col}]
-    except Exception as e:
-        st.error(f"❌ Failed to verify PBCS_SEARCH_SERVICE: {str(e)}. Using default configuration.")
 
 # Initialize config options
 def init_config_options():
@@ -162,28 +151,28 @@ def init_config_options():
     if st.session_state.debug_mode:
         st.sidebar.expander("Session State").write(st.session_state)
 
-# Query cortex search service
-def query_cortex_search_service(query):
-    db, schema = session.get_current_database(), session.get_current_schema()
-    root = Root(session)
-    cortex_search_service = (
-        root.databases[db]
-        .schemas[schema]
-        .cortex_search_services[st.session_state.selected_cortex_search_service]
-    )
-    context_documents = cortex_search_service.search(
-        query, columns=[], limit=st.session_state.num_retrieved_chunks
-    )
-    results = context_documents.results
-    service_metadata = st.session_state.service_metadata
-    search_col = [s["search_column"] for s in service_metadata
-                  if s["name"] == st.session_state.selected_cortex_search_service][0]
-    context_str = ""
-    for i, r in enumerate(results):
-        context_str += f"Context document {i+1}: {r[search_col]} \n\n"
-    if st.session_state.debug_mode:
-        st.sidebar.text_area("Context documents", context_str, height=500)
-    return context_str
+# --- CORTEX SEARCH FUNCTION COMMENTED OUT DUE TO INACTIVE SERVICE ---
+# def query_cortex_search_service(query):
+#     db, schema = session.get_current_database(), session.get_current_schema()
+#     root = Root(session)
+#     cortex_search_service = (
+#         root.databases[db]
+#         .schemas[schema]
+#         .cortex_search_services[st.session_state.selected_cortex_search_service]
+#     )
+#     context_documents = cortex_search_service.search(
+#         query, columns=[], limit=st.session_state.num_retrieved_chunks
+#     )
+#     results = context_documents.results
+#     service_metadata = st.session_state.service_metadata
+#     search_col = [s["search_column"] for s in service_metadata
+#                  if s["name"] == st.session_state.selected_cortex_search_service][0]
+#     context_str = ""
+#     for i, r in enumerate(results):
+#         context_str += f"Context document {i+1}: {r[search_col]} \n\n"
+#     if st.session_state.debug_mode:
+#         st.sidebar.text_area("Context documents", context_str, height=500)
+#     return context_str
 
 # Get chat history
 def get_chat_history():
@@ -214,96 +203,19 @@ def make_chat_history_summary(chat_history, question):
         st.sidebar.text_area("Chat history summary", summary.replace("$", "\$"), height=150)
     return summary
 
-# Create prompt with enhanced instructions for unstructured queries
+# Create prompt handling text responses without cortex search context
 def create_prompt(user_question):
     chat_history_str = ""
-    previous_results_str = ""
-    query_lower = user_question.lower()
-    specific_keywords = ["metric", "describe", "reports", "facts", "Explain", "logic", "behind"]
-    is_specific_unstructured = any(keyword in query_lower for keyword in specific_keywords)
-    
     if st.session_state.use_chat_history:
         chat_history = get_chat_history()
         if chat_history:
-            question_summary = make_chat_history_summary(chat_history, user_question)
-            prompt_context = query_cortex_search_service(question_summary)
             chat_history_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history])
-        else:
-            prompt_context = query_cortex_search_service(user_question)
-    else:
-        prompt_context = query_cortex_search_service(user_question)
-        chat_history = []
     
-    # Include previous query results in the context if available
-    if st.session_state.current_results is not None and not st.session_state.current_results.empty:
-        previous_results_str = st.session_state.current_results.to_string(index=False)
-        prompt_context += f"\n\nPrevious Query Results:\n{previous_results_str}"
-    
-    if not prompt_context.strip():
-        return complete(st.session_state.model_name, user_question)
-    
-    if is_specific_unstructured:
-        if "metric" in query_lower:
-            if re.search(r'fy\s?\d{2}-\d{2}', query_lower):
-                fiscal_year = re.search(r'fy\s?(\d{2}-\d{2})', query_lower).group(1)
-                prompt_instruction = (
-                    f"Provide a detailed and concise explanation for the query '{user_question}' in the context of the Planning and Budgeting system for FY {fiscal_year}. "
-                    f"Describe the metric’s definition (e.g., Allocated FTE, Total Amount), calculation logic (e.g., aggregation of position or financial data), "
-                    f"join conditions (e.g., tables like POSITION_FACT or LINE_ITEM joined with dimensions like ORGANIZATION or FUND), "
-                    f"filter conditions (e.g., specific versions like COUNCIL1 or scenarios like FORECASTING), "
-                    f"and its business significance in budgeting or planning. Include relevant dimensions (e.g., Organization, Fund, Version). "
-                    f"Ensure the response is clear, concise, avoids document references, and directly addresses the metric."
-                )
-            else:
-                prompt_instruction = (
-                    f"Provide a detailed and concise explanation for the query '{user_question}' in the context of the Planning and Budgeting system. "
-                    f"Describe the metric’s definition (e.g., Allocated FTE, Total Amount), calculation logic (e.g., formulas, data sources like position or financial data), "
-                    f"join conditions (e.g., tables like POSITION_FACT or LINE_ITEM joined with dimensions), "
-                    f"filter conditions (e.g., specific versions or scenarios), "
-                    f"and its business significance in budgeting or planning. "
-                    f"Ensure the response is clear, specific, avoids document references, and directly addresses the metric."
-                )
-        elif "facts" in query_lower:
-            prompt_instruction = (
-                f"Provide a detailed and concise explanation for the query '{user_question}' in the context of the Planning and Budgeting system. "
-                f"Explain the fact table’s purpose (e.g., LINE_ITEM_FACT or POSITION_FACT), key metrics (e.g., measures like FTE, financial amounts, or headcount), "
-                f"its role in budgeting or analysis, join conditions with dimension tables (e.g., ORGANIZATION, FUND, PROGRAM), "
-                f"and filter conditions used in queries. Include specific dimensions it integrates with. "
-                f"Ensure the response is clear, specific, avoids document references, and directly addresses the fact."
-            )
-        elif "reports" in query_lower:
-            prompt_instruction = (
-                f"Provide a detailed and concise explanation for the query '{user_question}' in the context of the Planning and Budgeting system. "
-                f"Describe the report’s purpose, key metrics or data presented, data sources (e.g., fact tables like LINE_ITEM_FACT), "
-                f"join conditions (e.g., joins with dimension tables like ORGANIZATION or PROGRAM), "
-                f"filter conditions (e.g., specific fiscal years or versions), and its business use case in budgeting or planning. "
-                f"Ensure the response is clear, specific, avoids document references, and directly addresses the report."
-            )
-        elif "join" in query_lower or "filter" in query_lower:
-            prompt_instruction = (
-                f"Provide a detailed and concise explanation for the query '{user_question}' in the context of the Planning and Budgeting system. "
-                f"Explain the join conditions (e.g., tables like POSITION_FACT or LINE_ITEM_FACT joined with dimensions like ORGANIZATION, FUND, or PROGRAM) "
-                f"and filter conditions (e.g., specific versions like COUNCIL1, scenarios like FORECASTING, or fiscal years) used in the data model. "
-                f"Describe their purpose and impact on query results in budgeting or planning. "
-                f"Ensure the response is clear, specific, avoids document references, and directly addresses the query."
-            )
-        else:
-            prompt_instruction = (
-                f"Provide a detailed and concise explanation for the query '{user_question}' in the context of the Planning and Budgeting system. "
-                f"Describe the system, feature, or concept, including its purpose, key components, and business significance. "
-                f"Include relevant details about data sources, join conditions, or filter conditions if applicable. "
-                f"Ensure the response is clear, specific, avoids document references, and directly addresses the query."
-            )
-    else:
-        prompt_instruction = (
-            f"You are a helpful AI chat assistant with RAG capabilities. When a user asks you a question, "
-            f"you will also be given context provided between <context> and </context> tags. Use that context "
-            f"with the user's chat history provided between <chat_history> and </chat_history> tags "
-            f"to provide a summary that addresses the user's question. Ensure the answer is coherent, concise, "
-            f"and directly relevant to the user's question. "
-            f"If the user asks a generic question which cannot be answered with the given context or chat_history, "
-            f"just respond directly and concisely to the user's question using the LLM."
-        )
+    prompt_instruction = (
+        f"Provide a detailed and concise explanation or answer for the query '{user_question}' "
+        f"in the context of Inventory Analytics and Stock Management data. "
+        f"Ensure the response is clear, specific, and directly addresses the user's request."
+    )
 
     prompt = f"""
         [INST]
@@ -312,9 +224,6 @@ def create_prompt(user_question):
         <chat_history>
         {chat_history_str}
         </chat_history>
-        <context>
-        {prompt_context}
-        </context>
         <question>
         {user_question}
         </question>
@@ -334,7 +243,7 @@ if not st.session_state.authenticated:
             conn = snowflake.connector.connect(
                 user=st.session_state.username,
                 password=st.session_state.password,
-                account="DWFIOCJ-BFB11160",
+                account="XYUHKAV-XRB12650",
                 host=HOST,
                 port=443,
                 warehouse="COMPUTE_WH",
@@ -383,7 +292,7 @@ else:
 
     def is_structured_query(query: str):
         structured_patterns = [
-            r'\b(total|show|top|funding|net increase|net decrease|group by|order by|how much|give|count|avg|max|min|least|highest|by year|how many|total amount|version|scenario|forecast|year|savings|award|position|budget|allocation|expenditure|department|variance|breakdown|comparison|change)\b'
+            r'\b(total|show|top|inventory value|quantity|on hand|available qty|stockout|warehouse|product|category|brand|excess stock|reorder|safety stock|sum|count|avg|max|min)\b'
         ]
         return any(re.search(pattern, query.lower()) for pattern in structured_patterns)
 
@@ -477,9 +386,11 @@ else:
         if is_structured:
             payload["tools"].append({"tool_spec": {"type": "cortex_analyst_text_to_sql", "name": "analyst1"}})
             payload["tool_resources"] = {"analyst1": {"semantic_model_file": SEMANTIC_MODEL}}
-        else:
-            payload["tools"].append({"tool_spec": {"type": "cortex_search", "name": "search1"}})
-            payload["tool_resources"] = {"search1": {"name": st.session_state.selected_cortex_search_service, "max_results": st.session_state.num_retrieved_chunks}}
+        # --- CORTEX SEARCH TOOL CALL COMMENTED OUT ---
+        # else:
+        #     payload["tools"].append({"tool_spec": {"type": "cortex_search", "name": "search1"}})
+        #     payload["tool_resources"] = {"search1": {"name": st.session_state.selected_cortex_search_service, "max_results": st.session_state.num_retrieved_chunks}}
+        
         try:
             resp = requests.post(
                 url=f"https://{HOST}{API_ENDPOINT}",
@@ -503,12 +414,7 @@ else:
         except Exception:
             return None
 
-    def summarize_unstructured_answer(answer):
-        sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|")\s+', answer)
-        return "\n".join(f"- {sent.strip()}" for sent in sentences[:6] if sent.strip())
-
     def suggest_sample_questions(query: str) -> List[str]:
-        # Return the first 5 questions from the predefined sample_questions list
         return sample_questions[:5]
 
     def process_sse_response(response, is_structured):
@@ -530,8 +436,8 @@ else:
                                         result_data = result.get("json", {})
                                         if is_structured and "sql" in result_data:
                                             sql = result_data.get("sql", "")
-                                        elif not is_structured and "searchResults" in result_data:
-                                            search_results = [sr["text"] for sr in result_data["searchResults"]]
+                                        # elif not is_structured and "searchResults" in result_data:
+                                        #     search_results = [sr["text"] for sr in result_data["searchResults"]]
         except Exception as e:
             st.error(f"❌ Error Processing Response: {str(e)}")
             return sql, search_results
@@ -541,8 +447,8 @@ else:
         if df.empty or len(df.columns) < 2:
             return
         query_lower = query.lower()
-        if re.search(r'\b(county|jurisdiction)\b', query_lower):
-            default_chart = "Pie Chart"
+        if re.search(r'\b(warehouse|region)\b', query_lower):
+            default_chart = "Bar Chart"
         elif re.search(r'\b(month|year|date)\b', query_lower):
             default_chart = "Line Chart"
         else:
@@ -622,8 +528,8 @@ else:
         with about_container:
             st.markdown("### About")
             st.write(
-                "This application uses **Snowflake Cortex Analyst** to interpret "
-                "your natural language questions and generate data insights. "
+                "This application uses **Snowflake Cortex Analyst** with your Inventory Semantic Model "
+                "to interpret your natural language questions and generate data insights. "
                 "Simply ask a question below to see relevant answers and visualizations."
             )
         with help_container:
@@ -634,37 +540,34 @@ else:
                 "- [Contact Support](https://support.snowflake.com/s/)"
             )
 
-    st.title("Cortex AI-PBCS Assistant by DiLytics")
+    st.title("Cortex AI-Inventory Assistant by DiLytics")
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     st.markdown(f"Semantic Model: `{semantic_model_filename}`")
-    init_service_metadata()
 
     # Display welcome message only once, outside of chat history loop
     if not st.session_state.welcome_displayed:
-        welcome_message = "Hi, I am your PBCS Assistant. I can help you explore data, insights and analytics on PBCS (Planning and Budgeting insight solution)."
+        welcome_message = "Hi, I am your Inventory Assistant. I can help you explore inventory stock positions, valuations, stockouts, and analytics."
         with st.chat_message("assistant"):
             st.markdown(welcome_message, unsafe_allow_html=True)
-        # Add to chat_history only if not already present
         if not any(msg["content"] == welcome_message for msg in st.session_state.chat_history):
             st.session_state.chat_history.append({"role": "assistant", "content": welcome_message})
         st.session_state.welcome_displayed = True
 
     st.sidebar.subheader("Sample Questions")
     sample_questions = [
-        "What kind of data can i get using this assistant?",
-        "What are the key subject areas covered in the solution?",
-        "Top 10 Total Amount by Organization and Version?",
-        "Show the top 5 programs with the highest net increase in budget between FY16-17 and FY17-18?",
-        "What are the allocated FTE and allocated amounts for project PJ_1000001 in FY16-17 and FY17-18 under the Working or Final version?",
-        "Give me the data for which Position, Award, and Fund contribute most to the year-on-year budget variance?",
-        "Explain the logic behind Allocated FTE metric?",
-        "Explain the logic behind Net Incr/Decr metric?"
+        "What is the total inventory value as of the latest snapshot date?",
+        "What is the total quantity of inventory currently on hand?",
+        "What is the inventory value by warehouse as of the latest snapshot?",
+        "What is the total inventory value by product category as of the latest snapshot?",
+        "How many products are out of stock as of the latest snapshot?",
+        "How many products need to be reordered as of the latest snapshot?",
+        "What is the total excess inventory value by warehouse?",
+        "What is the inventory value by ABC classification?"
     ]
 
     # Display chat history without chat bubbles for assistant, skipping the welcome message
     for idx, message in enumerate(st.session_state.chat_history):
-        # Skip the welcome message since it's already displayed above
-        if idx == 0 and message["content"] == "Hi, I am your PBCS Assistant. I can help you explore data, insights and analytics on PBCS (Planning and Budgeting insight solution).":
+        if idx == 0 and "Hi, I am your Inventory Assistant" in message["content"]:
             continue
         if message["role"] == "user":
             with st.chat_message("user"):
@@ -683,16 +586,12 @@ else:
                     display_chart_tab(message["results"], prefix=unique_prefix, query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
-    # Check if a suggested question was clicked
     if not query and st.session_state.selected_query:
         query = st.session_state.selected_query
-        # Append the selected query to chat history since it's being processed
         st.session_state.chat_history.append({"role": "user", "content": query})
         st.session_state.messages.append({"role": "user", "content": query})
-        # Clear the selected query to prevent reprocessing
         st.session_state.selected_query = None
-    if query and query.lower().startswith("no of"):
-        query = query.replace("no of", "number of", 1)
+
     for sample in sample_questions:
         if st.sidebar.button(sample, key=sample):
             query = sample
@@ -729,10 +628,10 @@ else:
             failed_response = False
 
             if is_greeting:
-                response_content = "Hello! Here are some questions you can ask me:\n\n"
+                response_content = "Hello! Here are some inventory questions you can ask me:\n\n"
                 for i, q in enumerate(sample_questions[:5], 1):
                     response_content += f"{i}. {q}\n"
-                response_content += "\nFeel free to ask any of these or come up with your own related to PBCS data!"
+                response_content += "\nFeel free to ask any of these or come up with your own related to Inventory Analytics!"
                 with response_placeholder:
                     with st.chat_message("assistant"):
                         st.markdown(response_content, unsafe_allow_html=True)
@@ -742,10 +641,10 @@ else:
                 st.session_state.show_suggested_buttons = True
 
             elif is_suggestion:
-                response_content = "Here are some questions you can ask me:\n\n"
+                response_content = "Here are some inventory questions you can ask me:\n\n"
                 for i, q in enumerate(sample_questions[:5], 1):
                     response_content += f"{i}. {q}\n"
-                response_content += "\nFeel free to ask any of these or come up with your own related to PBCS data!"
+                response_content += "\nFeel free to ask any of these or come up with your own related to Inventory Analytics!"
                 with response_placeholder:
                     with st.chat_message("assistant"):
                         st.markdown(response_content, unsafe_allow_html=True)
@@ -757,7 +656,7 @@ else:
             elif is_invalid:
                 suggestions = suggest_sample_questions(query)
                 st.session_state.last_suggestions = suggestions
-                response_content = "I'm sorry, I didn't understand your question. Could you please rephrase it? Here are some suggested questions:\n\n"
+                response_content = "I'm sorry, I didn't understand your question. Could you please rephrase it? Here are some suggested inventory questions:\n\n"
                 for i, suggestion in enumerate(suggestions, 1):
                     response_content += f"{i}. {suggestion}\n"
                 response_content += "\nFeel free to ask any of these or rephrase your question!"
@@ -842,15 +741,10 @@ else:
                     assistant_response["content"] = response_content
 
             else:
-                response = snowflake_api_call(query, is_structured=False)
-                _, search_results = process_sse_response(response, is_structured=False)
-                if search_results:
-                    raw_result = search_results[0]
-                    summary = create_prompt(query)
-                    if summary:
-                        response_content = summary
-                    else:
-                        response_content = summarize_unstructured_answer(raw_result)
+                # Fallback to general LLM response since Cortex Search is bypassed
+                response = create_prompt(query)
+                if response:
+                    response_content = response
                     with response_placeholder:
                         with st.chat_message("assistant"):
                             st.markdown(response_content, unsafe_allow_html=True)
@@ -863,7 +757,7 @@ else:
             if failed_response:
                 suggestions = suggest_sample_questions(query)
                 st.session_state.last_suggestions = suggestions
-                response_content = "I'm sorry, I didn't understand your question. Could you please rephrase it? Here are some suggested questions:\n\n"
+                response_content = "I'm sorry, I didn't understand your question. Could you please rephrase it? Here are some suggested inventory questions:\n\n"
                 for i, suggestion in enumerate(suggestions, 1):
                     response_content += f"{i}. {suggestion}\n"
                 response_content += "\nFeel free to ask any of these or rephrase your question!"
@@ -884,6 +778,3 @@ else:
             st.session_state.current_results = assistant_response.get("results")
             st.session_state.current_sql = assistant_response.get("sql")
             st.session_state.current_summary = assistant_response.get("summary")
-
-
-
