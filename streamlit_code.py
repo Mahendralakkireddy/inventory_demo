@@ -292,20 +292,21 @@ else:
 
     def is_structured_query(query: str):
         structured_patterns = [
-            r'\b(total|show|top|inventory value|quantity|on hand|available qty|stockout|warehouse|product|category|brand|excess stock|reorder|safety stock|sum|count|avg|max|min)\b'
+            r'\b(total|show|top|inventory value|quantity|on hand|available qty|stockout|warehouse|product|category|brand|excess stock|reorder|safety stock|sum|count|avg|max|min|snapshot|out of stock|reorder|quarantine|abc classification|stock count|days of supply|subcategory|hazardous|region|type|perishable|cold-chain|sku|rate|percentage|get)\b'
         ]
         return any(re.search(pattern, query.lower()) for pattern in structured_patterns)
 
-    def is_unstructured_query(query: str):
-        unstructured_keywords = [
-            "metric", "describe", "reports", "facts", "join", "filter", "explain", "summary",
-            "policy", "document", "description", "highlight", "guidelines", "procedure",
-            "how to", "define", "definition", "rules", "steps", "overview", "objective",
-            "purpose", "benefits", "importance", "impact", "details", "regulation",
-            "requirement", "compliance", "when to", "where to", "meaning", "interpretation",
-            "clarify", "note", "explanation", "instructions"
-        ]
-        return any(keyword in query.lower() for keyword in unstructured_keywords)
+    # --- IS_UNSTRUCTURED_QUERY FUNCTION COMMENTED OUT ---
+    # def is_unstructured_query(query: str):
+    #     unstructured_keywords = [
+    #         "metric", "describe", "reports", "facts", "join", "filter", "explain", "summary",
+    #         "policy", "document", "description", "highlight", "guidelines", "procedure",
+    #         "how to", "define", "definition", "rules", "steps", "overview", "objective",
+    #         "purpose", "benefits", "importance", "impact", "details", "regulation",
+    #         "requirement", "compliance", "when to", "where to", "meaning", "interpretation",
+    #         "clarify", "note", "explanation", "instructions"
+    #     ]
+    #     return any(keyword in query.lower() for keyword in unstructured_keywords)
 
     def is_complete_query(query: str):
         complete_patterns = [r'\b(generate|write|create|describe|explain)\b']
@@ -617,7 +618,7 @@ else:
         with st.spinner("Generating Response..."):
             response_placeholder = st.empty()
             is_structured = is_structured_query(query)
-            is_unstructured = is_unstructured_query(query)
+            # is_unstructured = is_unstructured_query(query)  <-- commented out
             is_complete = is_complete_query(query)
             is_summarize = is_summarize_query(query)
             is_suggestion = is_question_suggestion_query(query)
@@ -672,7 +673,7 @@ else:
                 st.session_state.current_summary = assistant_response.get("summary")
                 st.stop()
 
-            elif is_complete or is_unstructured:
+            elif is_complete: # Removed "or is_unstructured" since unstructured is commented out
                 response = create_prompt(query)
                 if response:
                     response_content = response
@@ -741,7 +742,6 @@ else:
                     assistant_response["content"] = response_content
 
             else:
-                # Fallback to general LLM response since Cortex Search is bypassed
                 response = create_prompt(query)
                 if response:
                     response_content = response
