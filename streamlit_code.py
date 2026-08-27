@@ -3,7 +3,6 @@ import json
 import re
 import requests
 import pandas as pd
-from snowflake.snowpark import Session
 from typing import Any, Dict, List, Optional, Tuple
 import plotly.express as px
 import time
@@ -32,9 +31,13 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Initialize native Snowpark session
-# Initialize session using Streamlit's built-in Snowflake connection
-conn = st.connection("snowflake")
+# Initialize connection from Streamlit Community Cloud secrets
+@st.cache_resource
+def get_snowflake_session():
+    conn = st.connection("snowflake")
+    return conn
+
+conn = get_snowflake_session()
 session = conn.session()
 
 # Initialize session state
@@ -77,18 +80,16 @@ if "rerun_trigger" not in st.session_state:
 st.markdown("""
 <style>
 #MainMenu, header, footer {visibility: hidden;}
-/* Prevent shading of previous chat messages and ensure text wrapping */
 [data-testid="stChatMessage"] {
     opacity: 1 !important;
     background-color: transparent !important;
 }
 [data-testid="stChatMessageContent"] {
-    white-space: normal !important; /* Ensure text wraps */
-    overflow-wrap: break-word !important; /* Wrap long words */
-    word-break: break-word !important; /* Break words if necessary */
-    max-width: 100% !important; /* Ensure content doesn't overflow */
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+    max-width: 100% !important;
 }
-/* Style for the logo container */
 .logo-container {
     position: absolute;
     top: 10px;
@@ -140,28 +141,6 @@ def get_chat_history():
         0, len(st.session_state.chat_history) - st.session_state.num_chat_messages
     )
     return st.session_state.chat_history[start_index : len(st.session_state.chat_history) - 1]
-
-# Make chat history summary
-def make_chat_history_summary(chat_history, question):
-    chat_history_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history])
-    prompt = f"""
-        [INST]
-        Based on the chat history below and the question, generate a query that extends the question
-        with the chat history provided. The query should be in natural language.
-        Answer with only the query. Do not add any explanation.
-
-        <chat_history>
-        {chat_history_str}
-        </chat_history>
-        <question>
-        {question}
-        </question>
-        [/INST]
-    """
-    summary = complete(st.session_state.model_name, prompt)
-    if st.session_state.debug_mode:
-        st.sidebar.text_area("Chat history summary", summary.replace("$", "\$"), height=150)
-    return summary
 
 # Create prompt handling general text responses
 def create_prompt(user_question):
@@ -218,18 +197,6 @@ def is_structured_query(query: str):
     ]
     return any(re.search(pattern, query.lower()) for pattern in structured_patterns)
 
-# --- UNSTRUCTURED QUERY LOGIC FULLY COMMENTED OUT ---
-# def is_unstructured_query(query: str):
-#     unstructured_keywords = [
-#         "metric", "describe", "reports", "facts", "join", "filter", "explain", "summary",
-#         "policy", "description", "highlight", "guidelines", "procedure",
-#         "how to", "define", "definition", "rules", "steps", "overview", "objective",
-#         "purpose", "benefits", "importance", "impact", "details", "regulation",
-#         "requirement", "compliance", "when to", "where to", "meaning", "interpretation",
-#         "clarify", "note", "explanation", "instructions"
-#     ]
-#     return any(keyword in query.lower() for keyword in unstructured_keywords)
-
 def is_complete_query(query: str):
     complete_patterns = [r'\b(generate|write|create|describe|explain)\b']
     return any(re.search(pattern, query.lower()) for pattern in complete_patterns)
@@ -282,10 +249,10 @@ def summarize(text):
         return None
 
 def snowflake_analyst_call(query: str):
-    """Calls Cortex Analyst REST API natively using the current Snowpark session token and host."""
+    """Calls Cortex Analyst REST API securely via Streamlit connection parameters."""
     try:
-        rest_url = session.connection.rest.host
-        token = session.connection.rest.token
+        rest_url = conn._conn.rest.host
+        token = conn._conn.rest.token
         
         payload = {
             "model": st.session_state.model_name,
@@ -417,8 +384,7 @@ with st.sidebar:
         st.markdown("### About")
         st.write(
             "This application uses **Snowflake Cortex Analyst** with your Inventory Semantic Model "
-            "to interpret your natural language questions and generate data insights. "
-            "Simply ask a question below to see relevant answers and visualizations."
+            "to interpret your natural language questions and generate data insights."
         )
     with help_container:
         st.markdown("### Help & Documentation")
@@ -432,7 +398,6 @@ st.title("Cortex AI-Inventory Assistant by DiLytics")
 semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
 st.markdown(f"Semantic Model: `{semantic_model_filename}`")
 
-# Display welcome message only once, outside of chat history loop
 if not st.session_state.welcome_displayed:
     welcome_message = "Hi, I am your Inventory Assistant. I can help you explore inventory stock positions, valuations, stockouts, and analytics."
     with st.chat_message("assistant"):
@@ -453,7 +418,6 @@ sample_questions = [
     "What are the top 10 products by inventory value?"
 ]
 
-# Display chat history without chat bubbles for assistant, skipping the welcome message
 for idx, message in enumerate(st.session_state.chat_history):
     if idx == 0 and "Hi, I am your Inventory Assistant" in message["content"]:
         continue
@@ -505,7 +469,6 @@ if query:
     with st.spinner("Generating Response..."):
         response_placeholder = st.empty()
         is_structured = is_structured_query(query)
-        # is_unstructured = is_unstructured_query(query)  <-- removed/commented out
         is_complete = is_complete_query(query)
         is_summarize = is_summarize_query(query)
         is_suggestion = is_question_suggestion_query(query)
