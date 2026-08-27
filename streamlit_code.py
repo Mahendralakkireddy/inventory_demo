@@ -188,7 +188,7 @@ else:
         return any(re.search(pattern, query.lower()) for pattern in structured_patterns)
 
     def is_summarize_query(query: str):
-        return any(re.search(r'\b(summarize|summary|condense)\b', query.lower()))
+        return bool(re.search(r'\b(summarize|summary|condense)\b', query.lower()))
 
     def is_question_suggestion_query(query: str):
         suggestion_patterns = [r'\b(what|which|how)\b.*\b(questions|type of questions|queries)\b.*\b(ask|can i ask|pose)\b', r'\b(give me|show me|list)\b.*\b(questions|examples|sample questions)\b']
