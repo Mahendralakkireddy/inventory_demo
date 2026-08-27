@@ -12,7 +12,7 @@ SCHEMA = "GOLD"
 WAREHOUSE = "COMPUTE_WH"
 
 # Page Configuration
-st.set_page_config(page_title="Inventory AI Copilot", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Dilytics Inventory AI", page_icon="📦", layout="wide")
 
 # Custom UI Styling
 st.markdown("""
@@ -48,7 +48,7 @@ if "authenticated" not in st.session_state:
     st.session_state.snowpark_session = None
 
 if not st.session_state.authenticated:
-    st.title("Welcome to Inventory AI Copilot")
+    st.title("Welcome to Dilytics Inventory AI")
     st.markdown("Please login to connect to your Snowflake Data Warehouse.")
     
     st.session_state.username = st.text_input("Enter Snowflake Username:", value=st.session_state.username)
@@ -286,7 +286,7 @@ def generate_sql_from_prompt(prompt: str):
     ]
     if not any(word in p for word in domain_keywords):
         explanation = (
-            "I am specialized strictly as an **Inventory Domain Intelligence Copilot**.\n\n"
+            "I am specialized strictly as an **Inventory Domain Intelligence**.\n\n"
             "I don't have external web data to answer general knowledge or non-inventory queries. "
             "Please ask a question related to stock, warehouses, products, or supply!"
         )
@@ -310,7 +310,7 @@ def generate_sql_from_prompt(prompt: str):
 
 # ----------------- LEFT NATIVE SIDEBAR PANEL -----------------
 with st.sidebar:
-    st.markdown("### ⚡ Copilot")
+    st.markdown("### ⚡ Dilytics AI")
     st.markdown('<span class="status-pill">● Semantic Mart Live</span>', unsafe_allow_html=True)
     st.write("")
     
@@ -353,7 +353,7 @@ with st.sidebar:
 # Header Bar
 head_col1, head_col2 = st.columns([4.5, 1.2])
 with head_col1:
-    st.title("💬 Inventory AI Copilot")
+    st.title("💬 Dilytics Inventory AI")
     st.caption("Ask questions in natural language to explore stock levels, warehouse capacity, and product segments.")
 with head_col2:
     st.write("")
