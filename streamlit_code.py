@@ -5,7 +5,7 @@ import snowflake.connector
 from snowflake.snowpark import Session
 
 # Configuration
-HOST = "XYUHKAV-XRB12650.snowflakecomputing.com"
+HOST = "XYUHKAV-XRB12650.snowflakecomputing.com" 
 ACCOUNT = "XYUHKAV-XRB12650"
 DATABASE = "INVENTORY_DW"
 SCHEMA = "GOLD"
@@ -310,7 +310,7 @@ def generate_sql_from_prompt(prompt: str):
 
 # ----------------- LEFT NATIVE SIDEBAR PANEL -----------------
 with st.sidebar:
-    st.markdown("### ⚡ Dilytics AI")
+    st.markdown("### ⚡Dilytics AI")
     st.markdown('<span class="status-pill">● Semantic Mart Live</span>', unsafe_allow_html=True)
     st.write("")
     
@@ -362,31 +362,40 @@ with head_col2:
         st.session_state.chat_sessions[current_id]["title"] = "New Conversation"
         st.rerun()
 
-# User-Centric Help & Capabilities Guide
-with st.expander("💡 What can I ask this assistant?", expanded=False):
+
+# ===================================================================
+# NEW UPDATED EXPANDER (Lists exactly what questions can be asked)
+# ===================================================================
+with st.expander("💡 What exact questions can I ask this assistant?", expanded=False):
+    st.markdown("This assistant is currently programmed to perfectly answer the following specific questions:")
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("""
-        **🎯 Warehouse & Stock Levels**
-        * Track total physical quantity on hand and available inventory.
-        * Breakdown inventory value by warehouse location.
-        * Identify excess stock value holding up capital.
-        **⚠️ Exceptions & Supply Issues**
-        * Find out exactly how many products are currently out of stock.
-        * Discover which products urgently need to be reordered.
-        * Analyze quarantine inventory.
+        **💰 Inventory Value & Quantity**
+        * "What is the total available inventory value?"
+        * "What is the total quantity of inventory currently on hand?"
+        * "What is the inventory value by warehouse?"
+        
+        **📦 Products & Categories**
+        * "What is the inventory value by product category?"
+        * "What is the inventory value by product subcategory?"
+        * "What is the inventory value by brand?"
+        * "What are the top 10 products by inventory value?"
+        * "What is the inventory value by ABC classification?"
         """)
     with col_b:
         st.markdown("""
-        **📦 Products & Categories**
-        * Breakdown stock value by category, subcategory, and brand.
-        * Analyze the top 10 products carrying the most inventory value.
-        * Segment inventory by ABC classification.
-        **❄️ Handling & Logistics**
-        * Find inventory value for perishable or hazardous goods.
-        * Calculate value of stock requiring cold-chain handling.
+        **⚠️ Stockouts & Exceptions**
+        * "How many products are out of stock?"
+        * "What is the stockout count by warehouse?"
+        * "What is the total excess inventory value by warehouse?"
+        * "How many products need to be reordered?"
+        
+        *(You can also ask general greetings like "Hi" or "How are you?")*
         """)
-    st.info("💡 **Pro-Tip:** Type naturally below or click any quick-prompt button to get started.")
+    st.info("💡 **Pro-Tip:** You can copy and paste any of these exact questions directly into the chat bar below!")
+# ===================================================================
+
 
 # Onboarding / Verified Questions Selector
 st.markdown("##### 💡 Verified Onboarding Questions:")
