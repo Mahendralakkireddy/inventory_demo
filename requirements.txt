@@ -1,0 +1,7 @@
+streamlit
+requests
+snowflake-connector-python
+pandas
+snowflake-snowpark-python
+snowflake-core
+plotly
