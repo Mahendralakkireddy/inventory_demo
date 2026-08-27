@@ -18,7 +18,7 @@ API_ENDPOINT = "/api/v2/cortex/agent:run"
 API_TIMEOUT = 50000  # in milliseconds
 
 # Updated to use your Inventory Semantic Model path
-SEMANTIC_MODEL = '@"INVENTORY_DW"."SEMANTIC"."SEMANTIC_MODELS"/inv_analytics.yaml'
+SEMANTIC_MODEL = '@"INVENTORY_DW"."SEMANTIC"."SEMANTIC_MODELS"/INVENTORY_ANALYST.yaml'
 
 # Model options
 MODELS = [
