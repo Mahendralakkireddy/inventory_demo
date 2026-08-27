@@ -8,16 +8,13 @@ from snowflake.snowpark import Session
 from typing import Any, Dict, List, Optional, Tuple
 import plotly.express as px
 import time
-
 # Snowflake/Cortex Configuration
-HOST = "xyuhkav-xrb12650.snowflakecomputing.com"
+HOST = "xyuhkav-xrb12650.snowflakecomputing.com" # NOTE: Ensure this matches your account locator
 DATABASE = "INVENTORY_DW"
 SCHEMA = "GOLD"
 API_ENDPOINT = "/api/v2/cortex/agent:run"
 API_TIMEOUT = 50000  # in milliseconds
-#CORTEX_SEARCH_SERVICES = "AI.DWH_MART.INVENTORY_SEARCH_SERVICE"
 SEMANTIC_MODEL = '@"INVENTORY_DW"."SEMANTIC"."SEMANTIC_MODELS"/INVENTORY_ANALYST.yaml'
-
 # Model options
 MODELS = [
     "mistral-large",
@@ -25,14 +22,12 @@ MODELS = [
     "llama3-70b",
     "llama3-8b",
 ]
-
 # Streamlit Page Config
 st.set_page_config(
     page_title="Welcome to Cortex AI Assistant",
     layout="wide",
     initial_sidebar_state="auto"
 )
-
 # Initialize session state
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -61,15 +56,8 @@ if "current_sql" not in st.session_state:
     st.session_state.current_sql = None
 if "current_summary" not in st.session_state:
     st.session_state.current_summary = None
-if "service_metadata" not in st.session_state:
-    st.session_state.service_metadata = []
-#if "selected_cortex_search_service" not in st.session_state:
-    #st.session_state.selected_cortex_search_service = CORTEX_SEARCH_SERVICES
 if "model_name" not in st.session_state:
     st.session_state.model_name = "mistral-large"
-# Cortex Search setting retained for future use:
-# if "num_retrieved_chunks" not in st.session_state:
-#     st.session_state.num_retrieved_chunks = 100
 if "num_chat_messages" not in st.session_state:
     st.session_state.num_chat_messages = 10
 if "use_chat_history" not in st.session_state:
@@ -82,23 +70,20 @@ if "selected_query" not in st.session_state:
     st.session_state.selected_query = None
 if "rerun_trigger" not in st.session_state:
     st.session_state.rerun_trigger = False
-
 # Hide Streamlit branding, prevent chat history shading, ensure text wrapping, and style the logo
 st.markdown("""
 <style>
 #MainMenu, header, footer {visibility: hidden;}
-/* Prevent shading of previous chat messages and ensure text wrapping */
 [data-testid="stChatMessage"] {
     opacity: 1 !important;
     background-color: transparent !important;
 }
 [data-testid="stChatMessageContent"] {
-    white-space: normal !important; /* Ensure text wraps */
-    overflow-wrap: break-word !important; /* Wrap long words */
-    word-break: break-word !important; /* Break words if necessary */
-    max-width: 100% !important; /* Ensure content doesn't overflow */
+    white-space: normal !important; 
+    overflow-wrap: break-word !important; 
+    word-break: break-word !important; 
+    max-width: 100% !important; 
 }
-/* Style for the logo container */
 .logo-container {
     position: absolute;
     top: 10px;
@@ -107,11 +92,9 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
 # Add DiLytics logo at the top right
-logo_url = "https://dilytics.com/wp-content/uploads/2022/11/logo.png"  # Replace with actual DiLytics logo URL
+logo_url = "https://dilytics.com/wp-content/uploads/2022/11/logo.png" 
 st.markdown(f'<div class="logo-container"><img src="{logo_url}" width="150"></div>', unsafe_allow_html=True)
-
 # Function to start a new conversation
 def start_new_conversation():
     st.session_state.chat_history = []
@@ -127,17 +110,6 @@ def start_new_conversation():
     st.session_state.clear_conversation = False
     st.session_state.welcome_displayed = False
     st.session_state.rerun_trigger = True
-
-# Initialize service metadata
-#def init_service_metadata():
-    # st.session_state.service_metadata = [{"name": "INVENTORY_SEARCH_SERVICE", "search_column": ""}]
-    # st.session_state.selected_cortex_search_service = "INVENTORY_SEARCH_SERVICE"
-    # try:
-    #     svc_search_col = session.sql("DESC CORTEX SEARCH SERVICE INVENTORY_SEARCH_SERVICE;").collect()[0]["search_column"]
-    #     st.session_state.service_metadata = [{"name": "INVENTORY_SEARCH_SERVICE", "search_column": svc_search_col}]
-    # except Exception as e:
-    #     st.error(f"❌ Failed to verify INVENTORY_SEARCH_SERVICE: {str(e)}. Using default configuration.")
-
 # Initialize config options
 def init_config_options():
     st.sidebar.button("Clear conversation", on_click=start_new_conversation)
@@ -145,15 +117,6 @@ def init_config_options():
     st.sidebar.toggle("Use chat history", key="use_chat_history", value=True)
     with st.sidebar.expander("Advanced options"):
         st.selectbox("Select model:", MODELS, key="model_name")
-        # Cortex Search setting disabled because Cortex Search/embedding is unavailable
-        # in the current Snowflake trial account.
-        # st.number_input(
-        #     "Select number of context chunks",
-        #     value=100,
-        #     key="num_retrieved_chunks",
-        #     min_value=1,
-        #     max_value=400
-        # )
         st.number_input(
             "Select number of messages to use in chat history",
             value=10,
@@ -163,67 +126,14 @@ def init_config_options():
         )
     if st.session_state.debug_mode:
         st.sidebar.expander("Session State").write(st.session_state)
-
-# Query cortex search service
-# def query_cortex_search_service(query):
-#     db, schema = session.get_current_database(), session.get_current_schema()
-#     # root = Root(session)  # Cortex Search disabled
-#     cortex_search_service = (
-#         root.databases[db]
-#         .schemas[schema]
-#         .cortex_search_services[st.session_state.selected_cortex_search_service]
-#     )
-#     context_documents = cortex_search_service.search(
-#         query, columns=[], limit=st.session_state.num_retrieved_chunks
-#     )
-#     results = context_documents.results
-#     service_metadata = st.session_state.service_metadata
-#     search_col = [s["search_column"] for s in service_metadata
-#                   if s["name"] == st.session_state.selected_cortex_search_service][0]
-#     context_str = ""
-#     for i, r in enumerate(results):
-#         context_str += f"Context document {i+1}: {r[search_col]} \n\n"
-#     if st.session_state.debug_mode:
-#         st.sidebar.text_area("Context documents", context_str, height=500)
-#     return context_str
-
 # Get chat history
 def get_chat_history():
     start_index = max(
         0, len(st.session_state.chat_history) - st.session_state.num_chat_messages
     )
     return st.session_state.chat_history[start_index : len(st.session_state.chat_history) - 1]
-
-# Make chat history summary
-def make_chat_history_summary(chat_history, question):
-    chat_history_str = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history])
-    prompt = f"""
-        [INST]
-        Based on the chat history below and the question, generate a query that extends the question
-        with the chat history provided. The query should be in natural language.
-        Answer with only the query. Do not add any explanation.
-
-        <chat_history>
-        {chat_history_str}
-        </chat_history>
-        <question>
-        {question}
-        </question>
-        [/INST]
-    """
-    summary = complete(st.session_state.model_name, prompt)
-    if st.session_state.debug_mode:
-        st.sidebar.text_area("Chat history summary", summary.replace("$", r"\$"), height=150)
-    return summary
-
-# Create prompt with enhanced instructions for unstructured queries
+# Create generic conversational prompt for non-SQL requests
 def create_prompt(user_question):
-    """Create an LLM prompt without Cortex Search.
-
-    Cortex Search is intentionally disabled because the current Snowflake
-    trial account does not provide the required embedding/search capability.
-    Structured questions continue to use Cortex Analyst below.
-    """
     chat_history_str = ""
     if st.session_state.use_chat_history:
         chat_history = get_chat_history()
@@ -231,39 +141,25 @@ def create_prompt(user_question):
             chat_history_str = "\n".join(
                 [f"{msg['role']}: {msg['content']}" for msg in chat_history]
             )
-
     previous_results_str = ""
     if st.session_state.current_results is not None and not st.session_state.current_results.empty:
         previous_results_str = st.session_state.current_results.to_string(index=False)
-
     prompt = f"""
         You are a helpful AI assistant for inventory analytics.
-
-        Cortex Search/document retrieval is currently unavailable in this Snowflake
-        trial account, so do not claim to have searched the Inventory PDF or cite
-        document contents unless they are explicitly present in the conversation.
-        For questions about structured inventory data, use the Cortex Analyst path.
-        For general questions, answer concisely from your available knowledge.
-        If a question specifically requires information from the unavailable PDF,
-        clearly state that document search is currently unavailable rather than
-        inventing details.
-
+        Answer the user's question directly and concisely based on your general knowledge 
+        or the provided chat history. Do not write SQL queries.
         <chat_history>
         {chat_history_str}
         </chat_history>
-
         <previous_query_results>
         {previous_results_str}
         </previous_query_results>
-
         <question>
         {user_question}
         </question>
-
         Answer directly and concisely.
     """
     return complete(st.session_state.model_name, prompt)
-
 # Authentication logic
 if not st.session_state.authenticated:
     st.title("Welcome to Snowflake Cortex AI")
@@ -300,12 +196,9 @@ if not st.session_state.authenticated:
             st.error(f"Authentication failed: {e}")
 else:
     session = st.session_state.snowpark_session
-    # root = Root(session)  # Cortex Search disabled
-
     if st.session_state.rerun_trigger:
         st.session_state.rerun_trigger = False
         st.rerun()
-
     # Utility Functions
     def run_snowflake_query(query):
         try:
@@ -321,43 +214,23 @@ else:
         except Exception as e:
             st.error(f"❌ SQL Execution Error: {str(e)}")
             return None
-
     def is_structured_query(query: str):
         structured_patterns = [
             r'\b(total|show|top|group by|order by|how much|give|count|average|avg|max|min|least|highest|lowest|by year|how many|amount|units|quantity|inventory|stock|movement|warehouse|product|sku|category|brand|region|status|receipt|issue|transfer|return|adjustment|scrap|value|cost|date|month|year|variance|breakdown|comparison|change)\b'
         ]
         return any(re.search(pattern, query.lower()) for pattern in structured_patterns)
-
-    def is_unstructured_query(query: str):
-        unstructured_keywords = [
-            "metric", "describe", "reports", "facts", "join", "filter", "explain", "summary",
-            "policy", "document", "description", "highlight", "guidelines", "procedure",
-            "how to", "define", "definition", "rules", "steps", "overview", "objective",
-            "purpose", "benefits", "importance", "impact", "details", "regulation",
-            "requirement", "compliance", "when to", "where to", "meaning", "interpretation",
-            "clarify", "note", "explanation", "instructions"
-        ]
-        return any(keyword in query.lower() for keyword in unstructured_keywords)
-
-    def is_complete_query(query: str):
-        complete_patterns = [r'\b(generate|write|create|describe|explain)\b']
-        return any(re.search(pattern, query.lower()) for pattern in complete_patterns)
-
     def is_summarize_query(query: str):
         summarize_patterns = [r'\b(summarize|summary|condense)\b']
         return any(re.search(pattern, query.lower()) for pattern in summarize_patterns)
-
     def is_question_suggestion_query(query: str):
         suggestion_patterns = [
             r'\b(what|which|how)\b.*\b(questions|type of questions|queries)\b.*\b(ask|can i ask|pose)\b',
             r'\b(give me|show me|list)\b.*\b(questions|examples|sample questions)\b'
         ]
         return any(re.search(pattern, query.lower()) for pattern in suggestion_patterns)
-
     def is_greeting_query(query: str):
         greeting_keywords = ["hi", "hello", "hey", "greetings"]
         return any(keyword == query.strip().lower() for keyword in greeting_keywords)
-
     def is_invalid_query(query: str) -> bool:
         query_clean = query.strip().lower()
         if not query_clean or len(query_clean) < 3:
@@ -369,7 +242,6 @@ else:
         if not words or all(len(word) < 3 for word in words):
             return True
         return False
-
     def complete(model, prompt):
         try:
             prompt = prompt.replace("'", "\\'")
@@ -379,7 +251,6 @@ else:
         except Exception as e:
             st.error(f"❌ COMPLETE Function Error: {str(e)}")
             return None
-
     def summarize(text):
         try:
             text = text.replace("'", "\\'")
@@ -389,7 +260,6 @@ else:
         except Exception as e:
             st.error(f"❌ SUMMARIZE Function Error: {str(e)}")
             return None
-
     def parse_sse_response(response_text: str) -> List[Dict]:
         events = []
         lines = response_text.strip().split("\n")
@@ -408,23 +278,9 @@ else:
                     except json.JSONDecodeError as e:
                         st.error(f"❌ Failed to parse SSE data: {str(e)} - Data: {data_str}")
         return events
-
     def snowflake_api_call(query: str, is_structured: bool = False):
-        """Call Cortex Analyst for structured inventory questions only.
-
-        Cortex Search is intentionally disabled for this trial account. The
-        previous cortex_search tool configuration is retained below as comments
-        for reference and must not be executed.
-        """
         if not is_structured:
-            # Cortex Search disabled: no cortex_search tool call is made.
-            # payload["tools"].append({"tool_spec": {"type": "cortex_search", "name": "search1"}})
-            # payload["tool_resources"] = {"search1": {
-            #     "name": st.session_state.selected_cortex_search_service,
-            #     "max_results": st.session_state.num_retrieved_chunks
-            # }}
             return None
-
         payload = {
             "model": st.session_state.model_name,
             "messages": [{"role": "user", "content": [{"type": "text", "text": query}]}],
@@ -455,20 +311,12 @@ else:
         except Exception as e:
             st.error(f"❌ Cortex Analyst API Error: {str(e)}")
             return None
-
-    def summarize_unstructured_answer(answer):
-        sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|")\s+', answer)
-        return "\n".join(f"- {sent.strip()}" for sent in sentences[:6] if sent.strip())
-
-    def suggest_sample_questions(query: str) -> List[str]:
-        # Return the first 5 questions from the predefined sample_questions list
-        return sample_questions[:5]
-
     def process_sse_response(response, is_structured):
         sql = ""
+        text_response = ""
         search_results = []
         if not response:
-            return sql, search_results
+            return sql, text_response, search_results
         try:
             for event in response:
                 if event.get("event") == "message.delta" and "data" in event:
@@ -483,14 +331,11 @@ else:
                                         result_data = result.get("json", {})
                                         if is_structured and "sql" in result_data:
                                             sql = result_data.get("sql", "")
-                                        # Cortex Search response handling disabled.
-                                        # elif not is_structured and "searchResults" in result_data:
-                                        #     search_results = [sr["text"] for sr in result_data["searchResults"]]
+                        elif item.get("type") == "text":
+                            text_response += item.get("text", "")
         except Exception as e:
             st.error(f"❌ Error Processing Response: {str(e)}")
-            return sql, search_results
-        return sql.strip(), search_results
-
+        return sql.strip(), text_response.strip(), search_results
     def display_chart_tab(df: pd.DataFrame, prefix: str = "chart", query: str = ""):
         if df.empty or len(df.columns) < 2:
             return
@@ -538,7 +383,6 @@ else:
         elif chart_type == "Histogram Chart":
             fig = px.histogram(df, x=x_col, title=chart_type)
             st.plotly_chart(fig, key=f"{prefix}_hist")
-
     # UI Logic
     with st.sidebar:
         st.markdown("""
@@ -587,22 +431,17 @@ else:
                 "- [Snowflake Cortex Analyst Docs](https://docs.snowflake.com/en/user-guide/snowflake-cortex)  \n"
                 "- [Contact Support](https://support.snowflake.com/s/)"
             )
-
     st.title("Cortex AI-Inventory Assistant by DiLytics")
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     st.markdown(f"Semantic Model: `{semantic_model_filename}`")
-    # init_service_metadata()  # Cortex Search disabled for trial account
-
-    # Display welcome message only once, outside of chat history loop
+    
     if not st.session_state.welcome_displayed:
         welcome_message = "Hi, I am your Inventory Assistant. I can help you explore data, insights and analytics on Inventory data, inventory movements, products, warehouses, locations and analytics."
         with st.chat_message("assistant"):
             st.markdown(welcome_message, unsafe_allow_html=True)
-        # Add to chat_history only if not already present
         if not any(msg["content"] == welcome_message for msg in st.session_state.chat_history):
             st.session_state.chat_history.append({"role": "assistant", "content": welcome_message})
         st.session_state.welcome_displayed = True
-
     st.sidebar.subheader("Sample Questions")
     sample_questions = [
         "What kind of inventory data can I get using this assistant?",
@@ -614,9 +453,8 @@ else:
         "Explain the logic behind signed inventory value.",
         "Explain the difference between inbound and outbound inventory movements."
     ]
-    # Display chat history without chat bubbles for assistant, skipping the welcome message
+    
     for idx, message in enumerate(st.session_state.chat_history):
-        # Skip the welcome message since it's already displayed above
         if idx == 0 and message["content"] == "Hi, I am your Inventory Assistant. I can help you explore data, insights and analytics on Inventory data, inventory movements, products, warehouses, locations and analytics.":
             continue
         if message["role"] == "user":
@@ -634,22 +472,20 @@ else:
                     st.markdown("**📈 Visualization:**")
                     unique_prefix = f"chart_{idx}_{hash(message['content'])}"
                     display_chart_tab(message["results"], prefix=unique_prefix, query=message.get("query", ""))
-
     query = st.chat_input("Ask your question...")
-    # Check if a suggested question was clicked
+    
     if not query and st.session_state.selected_query:
         query = st.session_state.selected_query
-        # Append the selected query to chat history since it's being processed
         st.session_state.chat_history.append({"role": "user", "content": query})
         st.session_state.messages.append({"role": "user", "content": query})
-        # Clear the selected query to prevent reprocessing
         st.session_state.selected_query = None
+        
     if query and query.lower().startswith("no of"):
         query = query.replace("no of", "number of", 1)
+        
     for sample in sample_questions:
         if st.sidebar.button(sample, key=sample):
             query = sample
-
     if query:
         st.session_state.chart_x_axis = None
         st.session_state.chart_y_axis = None
@@ -668,19 +504,18 @@ else:
         st.session_state.messages.append({"role": "user", "content": original_query})
         with st.chat_message("user"):
             st.markdown(f"**You:** {original_query}", unsafe_allow_html=True)
+            
         with st.spinner("Generating Response..."):
             response_placeholder = st.empty()
             is_structured = is_structured_query(query)
-            is_unstructured = is_unstructured_query(query)
-            is_complete = is_complete_query(query)
             is_summarize = is_summarize_query(query)
             is_suggestion = is_question_suggestion_query(query)
             is_greeting = is_greeting_query(query)
             is_invalid = is_invalid_query(query)
+            
             assistant_response = {"role": "assistant", "content": "", "query": query}
             response_content = ""
             failed_response = False
-
             if is_greeting:
                 response_content = "Hello! Here are some questions you can ask me:\n\n"
                 for i, q in enumerate(sample_questions[:5], 1):
@@ -693,7 +528,6 @@ else:
                 st.session_state.last_suggestions = sample_questions[:5]
                 st.session_state.messages.append({"role": "assistant", "content": response_content})
                 st.session_state.show_suggested_buttons = True
-
             elif is_suggestion:
                 response_content = "Here are some questions you can ask me:\n\n"
                 for i, q in enumerate(sample_questions[:5], 1):
@@ -706,7 +540,6 @@ else:
                 st.session_state.last_suggestions = sample_questions[:5]
                 st.session_state.messages.append({"role": "assistant", "content": response_content})
                 st.session_state.show_suggested_buttons = True
-
             elif is_invalid:
                 suggestions = suggest_sample_questions(query)
                 st.session_state.last_suggestions = suggestions
@@ -725,20 +558,6 @@ else:
                 st.session_state.current_sql = assistant_response.get("sql")
                 st.session_state.current_summary = assistant_response.get("summary")
                 st.stop()
-
-            elif is_complete or is_unstructured:
-                response = create_prompt(query)
-                if response:
-                    response_content = response
-                    with response_placeholder:
-                        with st.chat_message("assistant"):
-                            st.markdown(response_content, unsafe_allow_html=True)
-                    assistant_response["content"] = response_content
-                    st.session_state.messages.append({"role": "assistant", "content": response_content})
-                else:
-                    failed_response = True
-                    assistant_response["content"] = response_content
-
             elif is_summarize:
                 summary = summarize(query)
                 if summary:
@@ -751,10 +570,10 @@ else:
                 else:
                     failed_response = True
                     assistant_response["content"] = response_content
-
             elif is_structured:
                 response = snowflake_api_call(query, is_structured=True)
-                sql, _ = process_sse_response(response, is_structured=True)
+                sql, text_response, _ = process_sse_response(response, is_structured=True)
+                
                 if sql:
                     results = run_snowflake_query(sql)
                     if results is not None and not results.empty:
@@ -780,26 +599,13 @@ else:
                             "results": results,
                             "summary": summary
                         })
-                        st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": response_content,
-                            "sql": sql,
-                            "results": results,
-                            "summary": summary
-                        })
+                        st.session_state.messages.append(assistant_response.copy())
                     else:
                         failed_response = True
-                        assistant_response["content"] = response_content
-                else:
-                    failed_response = True
-                    assistant_response["content"] = response_content
-
-            else:
-                # Cortex Search is disabled. Answer unstructured/general questions
-                # using the LLM only; no document retrieval is attempted.
-                summary = create_prompt(query)
-                if summary:
-                    response_content = summary
+                        response_content = "The query executed successfully but returned 0 rows of data."
+                        
+                elif text_response:
+                    response_content = text_response
                     with response_placeholder:
                         with st.chat_message("assistant"):
                             st.markdown(response_content, unsafe_allow_html=True)
@@ -808,7 +614,19 @@ else:
                 else:
                     failed_response = True
                     assistant_response["content"] = response_content
-
+            else:
+                # Catch-all conversational fallback (handles unstructured questions via LLM)
+                response = create_prompt(query)
+                if response:
+                    response_content = response
+                    with response_placeholder:
+                        with st.chat_message("assistant"):
+                            st.markdown(response_content, unsafe_allow_html=True)
+                    assistant_response["content"] = response_content
+                    st.session_state.messages.append({"role": "assistant", "content": response_content})
+                else:
+                    failed_response = True
+                    assistant_response["content"] = response_content
             if failed_response:
                 suggestions = suggest_sample_questions(query)
                 st.session_state.last_suggestions = suggestions
@@ -827,12 +645,8 @@ else:
                 st.session_state.current_sql = assistant_response.get("sql")
                 st.session_state.current_summary = assistant_response.get("summary")
                 st.stop()
-
             st.session_state.chat_history.append(assistant_response)
             st.session_state.current_query = query
             st.session_state.current_results = assistant_response.get("results")
             st.session_state.current_sql = assistant_response.get("sql")
             st.session_state.current_summary = assistant_response.get("summary")
-
-
-
