@@ -33,7 +33,9 @@ st.set_page_config(
 )
 
 # Initialize native Snowpark session
-session = Session.builder.getOrCreate()
+# Initialize session using Streamlit's built-in Snowflake connection
+conn = st.connection("snowflake")
+session = conn.session()
 
 # Initialize session state
 if "chat_history" not in st.session_state:
