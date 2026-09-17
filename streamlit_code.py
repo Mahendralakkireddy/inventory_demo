@@ -397,7 +397,8 @@ button[aria-label*="Expand sidebar"] {
 
 /* Dataframes */
 [data-testid="stDataFrame"] {
-    border-radius:12px; overflow:hidden;
+    border-radius:12px;
+    overflow:visible !important;
 }
 
 /* Remove excess Streamlit decoration */
@@ -4417,7 +4418,7 @@ def display_chart_tab(df: pd.DataFrame, key_prefix: str = ""):
 
     chart_type = col3.selectbox(
         "Chart Type",
-        ["Bar Chart", "Line Chart", "Area Chart", "Scatter Plot"],
+        ["Bar Chart", "Line Chart", "Area Chart", "Scatter Plot", "Pie Chart"],
         key=f"{key_prefix}_type",
     )
 
@@ -4440,10 +4441,122 @@ def display_chart_tab(df: pd.DataFrame, key_prefix: str = ""):
             st.line_chart(chart_df.set_index(x_col)[y_col])
         elif chart_type == "Area Chart":
             st.area_chart(chart_df.set_index(x_col)[y_col])
+        elif chart_type == "Pie Chart":
+            # Streamlit/Vega-Lite implementation: no matplotlib dependency.
+            pie_data = chart_df[[x_col, y_col]].copy()
+            pie_data.columns = ["_pie_category", "_pie_value"]
+            pie_data = pie_data.dropna(subset=["_pie_category", "_pie_value"])
+            pie_data["_pie_value"] = pd.to_numeric(
+                pie_data["_pie_value"], errors="coerce"
+            )
+            pie_data = pie_data.dropna(subset=["_pie_value"])
+
+            if pie_data.empty:
+                st.info(
+                    "Pie Chart requires a categorical dimension and numeric metric."
+                )
+            else:
+                pie_spec = {
+                    "mark": {"type": "arc"},
+                    "encoding": {
+                        "theta": {
+                            "field": "_pie_value",
+                            "type": "quantitative",
+                            "stack": True,
+                        },
+                        "color": {
+                            "field": "_pie_category",
+                            "type": "nominal",
+                            "title": x_col,
+                        },
+                        "tooltip": [
+                            {
+                                "field": "_pie_category",
+                                "type": "nominal",
+                                "title": x_col,
+                            },
+                            {
+                                "field": "_pie_value",
+                                "type": "quantitative",
+                                "title": y_col,
+                            },
+                        ],
+                    },
+                    "view": {"stroke": None},
+                }
+                st.vega_lite_chart(
+                    pie_data,
+                    pie_spec,
+                    use_container_width=True,
+                )
         else:
             st.scatter_chart(chart_df, x=x_col, y=y_col)
     except Exception as e:
         st.info(f"Chart could not be rendered: {e}")
+
+
+def render_chatbot_dataframe(df: pd.DataFrame, key_prefix: str):
+    """
+    Render chatbot result data with search/download controls.
+    The normal st.dataframe is retained so Streamlit's native dataframe
+    toolbar is also available on versions that support it.
+    """
+    if df is None:
+        return
+
+    work_df = df.copy()
+
+    toolbar_left, toolbar_download, toolbar_reset = st.columns([8, 1.2, 1.2])
+
+    with toolbar_left:
+        search_text = st.text_input(
+            "Search table",
+            value="",
+            placeholder="🔍 Search table...",
+            key=f"{key_prefix}_search",
+            label_visibility="collapsed",
+        )
+
+    if search_text:
+        search_lower = search_text.lower()
+        mask = work_df.astype(str).apply(
+            lambda col: col.str.lower().str.contains(
+                re.escape(search_lower),
+                na=False,
+            )
+        ).any(axis=1)
+        display_df = work_df.loc[mask].copy()
+        st.caption(f"Showing {len(display_df):,} of {len(work_df):,} rows")
+    else:
+        display_df = work_df
+        st.caption(f"{len(work_df):,} rows")
+
+    with toolbar_download:
+        st.download_button(
+            "⬇️",
+            data=display_df.to_csv(index=False).encode("utf-8"),
+            file_name="chatbot_result.csv",
+            mime="text/csv",
+            key=f"{key_prefix}_download",
+            use_container_width=True,
+            help="Download the displayed table as CSV",
+        )
+
+    with toolbar_reset:
+        if st.button(
+            "↺",
+            key=f"{key_prefix}_reset",
+            use_container_width=True,
+            help="Clear table search",
+        ):
+            st.session_state[f"{key_prefix}_search"] = ""
+            st.rerun()
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 # ===================================================================
@@ -4913,7 +5026,10 @@ for idx, msg in enumerate(messages):
         if msg.get("data") is not None:
             tab_data, tab_chart = st.tabs(["Data 📄", "Chart 📈"])
             with tab_data:
-                st.dataframe(msg["data"], use_container_width=True)
+                render_chatbot_dataframe(
+                    msg["data"],
+                    key_prefix=f"hist_{current_id}_{idx}",
+                )
             with tab_chart:
                 display_chart_tab(
                     msg["data"],
@@ -5012,7 +5128,10 @@ if user_prompt:
                 if doc_df_result is not None:
                     tab_data, tab_chart = st.tabs(["Data 📄", "Chart 📈"])
                     with tab_data:
-                        st.dataframe(doc_df_result, use_container_width=True)
+                        render_chatbot_dataframe(
+                    doc_df_result,
+                    key_prefix=f"document_{current_id}_{len(messages)}",
+                )
                     with tab_chart:
                         display_chart_tab(
                             doc_df_result,
@@ -5112,7 +5231,10 @@ if user_prompt:
                 tab_data, tab_chart = st.tabs(["Data 📄", "Chart 📈"])
 
                 with tab_data:
-                    st.dataframe(df, use_container_width=True)
+                    render_chatbot_dataframe(
+                        df,
+                        key_prefix=f"live_{current_id}_{len(messages)}",
+                    )
 
                 with tab_chart:
                     display_chart_tab(
@@ -5144,4 +5266,3 @@ if user_prompt:
         })
 
     st.rerun()
-
