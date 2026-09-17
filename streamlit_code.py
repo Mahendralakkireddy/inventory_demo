@@ -4542,15 +4542,20 @@ def render_chatbot_dataframe(df: pd.DataFrame, key_prefix: str):
             help="Download the displayed table as CSV",
         )
 
+    # Clear the search value through a button callback.
+    # The callback runs before widgets are instantiated on the next rerun,
+    # so it is safe to update the text_input session-state value here.
+    def clear_table_search():
+        st.session_state[f"{key_prefix}_search"] = ""
+
     with toolbar_reset:
-        if st.button(
-            "↺",
+        st.button(
+            "↻",
             key=f"{key_prefix}_reset",
             use_container_width=True,
-            help="Clear table search",
-        ):
-            st.session_state[f"{key_prefix}_search"] = ""
-            st.rerun()
+            help="Clear table search / refresh table",
+            on_click=clear_table_search,
+        )
 
     st.dataframe(
         display_df,
